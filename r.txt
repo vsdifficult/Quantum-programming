@@ -1,1 +1,8 @@
 qiskit
+pennylane
+tensorflow 
+keras_preprocessing
+torchvision
+torch
+matplotlib 
+scikit-learn
