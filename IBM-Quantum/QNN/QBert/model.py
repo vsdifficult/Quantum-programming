@@ -32,21 +32,29 @@ class QuantumBERT(nn.Module):
     def forward(self, texts):
         all_embeddings = []
         for text in texts:
-            # Токенизация текста
-            tokens = self.tokenizer(text, return_tensors="pt", padding=True, truncation=True)
-            input_ids = tokens["input_ids"]
-            attention_mask = tokens["attention_mask"]
+            # Токенизация текста с паддингом
+            tokens = self.tokenizer(
+                text,
+                return_tensors="pt",
+                padding="max_length",  # Добавляем паддинг до максимальной длины
+                truncation=True,
+                max_length=128  # Максимальная длина последовательности
+            )
+            input_ids = tokens["input_ids"][0]  # Берём первую последовательность
+            attention_mask = tokens["attention_mask"][0]
 
-            # Создание квантовых эмбеддингов
             quantum_embeddings = []
-            for token_id in input_ids[0]:
-                # Получаем эмбеддинг токена из BERT
-                token_embedding = self.bert.embeddings.word_embeddings(token_id).detach().numpy()
-                # Создаем квантовое состояние
-                quantum_state = create_quantum_embedding(token_embedding)
-                # Преобразуем обратно в классический вектор
-                classical_vector = quantum_to_classical(quantum_state)
-                quantum_embeddings.append(classical_vector)
+            for token_id in input_ids:
+                if token_id == 0:  # Пропускаем токены [PAD], если они есть
+                    quantum_embeddings.append(np.zeros(768))  # Добавляем нулевой вектор для паддинга
+                else:
+                    # Получаем эмбеддинг токена из BERT
+                    token_embedding = self.bert.embeddings.word_embeddings(token_id).detach().numpy()
+                    # Создаем квантовое состояние
+                    quantum_state = create_quantum_embedding(token_embedding)
+                    # Преобразуем обратно в классический вектор
+                    classical_vector = quantum_to_classical(quantum_state)
+                    quantum_embeddings.append(classical_vector)
 
             # Преобразуем список в тензор
             quantum_embeddings = torch.tensor(np.array(quantum_embeddings), dtype=torch.float32)
@@ -56,11 +64,11 @@ class QuantumBERT(nn.Module):
 
             all_embeddings.append(transformed_embeddings)
 
-        # Объединяем все эмбеддинги
+        # Объединяем все эмбеддинги, учитывая одинаковую длину последовательностей
         all_embeddings = torch.cat(all_embeddings, dim=0)
 
         # Передаем эмбеддинги в BERT
-        outputs = self.bert(inputs_embeds=all_embeddings, attention_mask=attention_mask)
+        outputs = self.bert(inputs_embeds=all_embeddings, attention_mask=attention_mask.unsqueeze(0))
         return outputs.last_hidden_state
 
 # Пример использования
